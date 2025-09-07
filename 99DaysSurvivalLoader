@@ -1,0 +1,116 @@
+-- ClientLoaderCustom.lua
+-- Custom client-side loader for 99 Days Survival
+
+local Players = game:GetService("Players")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local Lighting = game:GetService("Lighting")
+local Player = Players.LocalPlayer
+local PlayerGui = Player:WaitForChild("PlayerGui")
+
+-- Wait for remotes from server
+local Remotes = ReplicatedStorage:WaitForChild("Remotes")
+local DayChanged = Remotes:WaitForChild("DayChanged")
+local StatsUpdated = Remotes:WaitForChild("StatsUpdated")
+local Announce = Remotes:WaitForChild("Announce")
+
+-- Settings
+local MAX_HEALTH = 2000
+local HUNGER = 0
+local WALK_SPEED = 60
+local PLAYER_DAMAGE = 1000
+local DAY_DURATION = 60 -- seconds
+local NIGHT_DURATION = 1 -- seconds
+
+-- Create GUI
+local ScreenGui = Instance.new("ScreenGui")
+ScreenGui.Name = "SurvivalGUI"
+ScreenGui.Parent = PlayerGui
+
+-- Day/Night Label
+local DayLabel = Instance.new("TextLabel")
+DayLabel.Size = UDim2.new(0,200,0,50)
+DayLabel.Position = UDim2.new(0,10,0,10)
+DayLabel.TextColor3 = Color3.new(1,1,1)
+DayLabel.BackgroundTransparency = 0.5
+DayLabel.BackgroundColor3 = Color3.new(0,0,0)
+DayLabel.TextScaled = true
+DayLabel.Text = "Day: 0 (Day)"
+DayLabel.Parent = ScreenGui
+
+-- Stats Label
+local StatsLabel = Instance.new("TextLabel")
+StatsLabel.Size = UDim2.new(0,200,0,100)
+StatsLabel.Position = UDim2.new(0,10,0,70)
+StatsLabel.TextColor3 = Color3.new(1,1,1)
+StatsLabel.BackgroundTransparency = 0.5
+StatsLabel.BackgroundColor3 = Color3.new(0,0,0)
+StatsLabel.TextScaled = true
+StatsLabel.Text = string.format("Health: %d\nHunger: %d\nWalkSpeed: %d\nDamage: %d", MAX_HEALTH, HUNGER, WALK_SPEED, PLAYER_DAMAGE)
+StatsLabel.Parent = ScreenGui
+
+-- Announcement Label
+local AnnounceLabel = Instance.new("TextLabel")
+AnnounceLabel.Size = UDim2.new(0,300,0,50)
+AnnounceLabel.Position = UDim2.new(0,10,1,-60)
+AnnounceLabel.TextColor3 = Color3.new(1,1,0)
+AnnounceLabel.BackgroundTransparency = 0.5
+AnnounceLabel.BackgroundColor3 = Color3.new(0,0,0)
+AnnounceLabel.TextScaled = true
+AnnounceLabel.Text = ""
+AnnounceLabel.Parent = ScreenGui
+
+-- Apply stats locally
+local function applyStats()
+    if Player.Character and Player.Character:FindFirstChild("Humanoid") then
+        local humanoid = Player.Character.Humanoid
+        humanoid.MaxHealth = MAX_HEALTH
+        humanoid.Health = MAX_HEALTH
+        humanoid.WalkSpeed = WALK_SPEED
+    end
+end
+
+-- Day/Night cycle locally for visual
+local isDay = true
+local currentDay = 1
+
+task.spawn(function()
+    while true do
+        if isDay then
+            Lighting.ClockTime = 14 -- Day
+            DayLabel.Text = "Day: " .. currentDay .. " (Day)"
+            task.wait(DAY_DURATION)
+            isDay = false
+        else
+            Lighting.ClockTime = 2 -- Night
+            DayLabel.Text = "Day: " .. currentDay .. " (Night)"
+            task.wait(NIGHT_DURATION)
+            isDay = true
+            currentDay += 1
+            DayChanged:FireClient(Player, currentDay)
+        end
+    end
+end)
+
+-- Listen to server events
+StatsUpdated.OnClientEvent:Connect(function(stats)
+    applyStats()
+end)
+
+Announce.OnClientEvent:Connect(function(msg)
+    AnnounceLabel.Text = msg
+    task.delay(5, function()
+        AnnounceLabel.Text = ""
+    end)
+end)
+
+-- Initial setup
+if Player.Character then Player.Character:WaitForChild("Humanoid") end
+Player.CharacterAdded:Connect(function(char)
+    char:WaitForChild("Humanoid")
+    applyStats()
+end)
+
+-- Apply stats immediately
+applyStats()
+
+print("[Loader] Custom client loader initialized for " .. Player.Name)
